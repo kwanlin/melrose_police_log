@@ -1,0 +1,23 @@
+---
+title: "Melrose Police Log"
+author: "Kwan Lin"
+date: "7/19/2017"
+output: html_document
+---
+# Introduction
+
+This is a project to extract and analyze data from Melrose police logs.
+
+
+# Environment
+
+This section is intended to set up the working environment.
+
+```{r setup}
+#setwd(dir = "~/projects/melrose_police_log/")
+knitr::opts_knit$set(root.dir = "~/projects/melrose_police_log/")
+```
+
+# Data
+
+# Analysis
