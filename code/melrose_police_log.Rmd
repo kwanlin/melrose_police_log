@@ -2,22 +2,68 @@
 title: "Melrose Police Log"
 author: "Kwan Lin"
 date: "7/19/2017"
-output: html_document
+output:
+  hrbrthemes::ipsum:
+    keep_md: true
+editor_options:
+  chunk_output_type: inline
 ---
-# Introduction
+
+# Setup
+
+```{r setup, include=FALSE}
+#setwd(dir = "~/projects/melrose_police_log/")
+#knitr::opts_knit$set(root.dir = "~/pro jects/melrose_police_log/")
+knitr::opts_chunk$set(message=FALSE,
+                      warning=FALSE,
+                      echo=FALSE,
+                      fig.retina=2,
+                      dev=c("png", "cairo_pdf"))
+```
+
+```{r packages}
+library(rprojroot)
+library(rvest)
+library(httr)
+library(pbapply)
+library(stringi)
+
+# themes
+library(hrbrthemes)
+```
+
+```{r paths}
+root_path <- find_rstudio_root_file()
+```
+
+# Overview
 
 This is a project to extract and analyze data from Melrose police logs.
 
+# References
 
-# Environment
+https://stackoverflow.com/questions/33790052/download-all-files-from-a-folder-on-a-website
 
-This section is intended to set up the working environment.
 
-```{r setup}
-#setwd(dir = "~/projects/melrose_police_log/")
-knitr::opts_knit$set(root.dir = "~/projects/melrose_police_log/")
-```
 
 # Data
+
+```{r scrape-melrose-police-logs}
+log_url <- "https://melrosepolice.net/police-logs/"
+
+url_contents <- read_html(log_url)
+
+docs <- grep("docx", html_attr(html_nodes(url_contents, "a[href]"), "href"), value=TRUE)
+
+
+# ignore errors
+options(warn = -1)
+
+# apply to a list of urls for .docx files - download each file to a path. includes error handling
+lapply(docs, function(x) tryCatch(download.file(x,paste0(root_path,"/data/",basename(x))),
+                                  error = function(e) print(paste(basename(x), 'did not work out'))))
+
+# saveRDS(object, file = paste0(root_path,"/data/object.rds"))
+```
 
 # Analysis
