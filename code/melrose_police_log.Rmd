@@ -75,13 +75,13 @@ parse_log <- function(file_path) {
   
   file_df <- as.data.frame(file_contents)
   
-  test1_df_parse <- file_df %>%
-    filter(grepl("\\d{2}-\\d{4} \\d{4}|Location|Vicinity|Date", file_contents)) %>%
+  df_parse <- file_df %>%
+    filter(grepl("\\d{2}-\\d{4,} \\d{4}|Location|Vicinity|Date", file_contents)) %>%
     mutate(date_tag = ifelse(grepl("Date",file_contents), 1, 0)) %>%
     mutate(datestamp = ifelse(grepl("Date",file_contents), stringr::str_extract(file_contents, "\\d+/\\d+/\\d+"),NA)) %>%
     fill(datestamp) %>%
     filter(!grepl("Date",file_contents)) %>%
-    mutate(incident_tag = ifelse(grepl("\\d{2}-\\d{4} \\d{4}", file_contents),1,0)) %>%
+    mutate(incident_tag = ifelse(grepl("\\d{2}-\\d{4,} \\d{4}", file_contents),1,0)) %>%
     mutate(inc_cnt = cumsum(incident_tag)) %>%
     spread(incident_tag, file_contents) %>%
     janitor::clean_names() %>%
@@ -93,7 +93,7 @@ parse_log <- function(file_path) {
     mutate(location_addr = gsub("^(.+?) - ","", location_raw),
            location_addr = gsub("Apt.(.+?)$","", location_addr),
            location_addr = trimws(location_addr)) %>%
-    mutate(incident_id = stringr::str_extract(x1, "\\d{2}-\\d{4}")) %>% # \\d{4}
+    mutate(incident_id = stringr::str_extract(x1, "\\d{2}-\\d{4,}")) %>% # \\d{4}
     mutate(hour_min = stringr::str_extract(x1, " \\d{4}")) %>%
     mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0))
 }
@@ -102,6 +102,8 @@ parse_log <- function(file_path) {
 
 ```{r test-parse-func}
 test_function <- parse_log("../data/Dispatch-Log-From-April-13-20-2015.docx")
+
+test_function2 <- parse_log("../data/MPD-Dispatch-Log-Oct-22-to-Oct-28.docx")
 ```
 
 
