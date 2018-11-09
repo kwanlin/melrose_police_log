@@ -22,11 +22,14 @@ knitr::opts_chunk$set(message=FALSE,
 ```
 
 ```{r packages}
+library(tidyverse)
 library(rprojroot)
 library(rvest)
 library(httr)
 library(pbapply)
-library(stringi)
+library(stringr)
+# library(officer)
+library(textreadr)
 
 # themes
 library(hrbrthemes)
@@ -64,6 +67,31 @@ lapply(docs, function(x) tryCatch(download.file(x,paste0(root_path,"/data/",base
                                   error = function(e) print(paste(basename(x), 'did not work out'))))
 
 # saveRDS(object, file = paste0(root_path,"/data/object.rds"))
+```
+
+```{r parse-docx}
+test1 <- read_docx("../data/Dispatch-Log-From-April-13-20-2015.docx")
+
+test1
+
+test1_df <- as.data.frame(test1)
+
+test1_df_parse <- test1_df %>%
+  filter(grepl("\\d{2}-\\d{4} \\d{4}|Location|Vicinity", test1)) %>%
+  mutate(incident_tag = ifelse(grepl("\\d{2}-\\d{4} \\d{4}", test1),1,0)) %>%
+  mutate(inc_cnt = cumsum(incident_tag)) %>%
+  # mutate(field_type = iflese())
+  # select(-c(incident_tag)) %>%
+  spread(incident_tag, test1) %>%
+  janitor::clean_names() %>%
+  #rename("location" = "x0") %>%
+  mutate(location = gsub("Location/Address: |Vicinity of: ", "", x0)) %>%
+  # mutate(location = )
+  mutate(incident_id = stringr::str_extract(x1, "\\d{2}-\\d{4} \\d{4}")) %>%
+  mutate(hour_min = stringr::str_extract(x1, " \\d{4}")) %>%
+  mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0))
+
+#TODO: Add date field
 ```
 
 # Analysis
