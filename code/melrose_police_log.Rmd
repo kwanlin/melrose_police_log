@@ -95,7 +95,8 @@ parse_log <- function(file_path) {
            location_addr = trimws(location_addr)) %>%
     mutate(incident_id = stringr::str_extract(x1, "\\d{2}-\\d{4,}")) %>% # \\d{4}
     mutate(hour_min = stringr::str_extract(x1, " \\d{4}")) %>%
-    mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0))
+    # mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0)) %>%
+    select(-c(date_tag, inc_cnt))
 }
 
 ```
@@ -106,5 +107,10 @@ test_function <- parse_log("../data/Dispatch-Log-From-April-13-20-2015.docx")
 test_function2 <- parse_log("../data/MPD-Dispatch-Log-Oct-22-to-Oct-28.docx")
 ```
 
+```{r loop-over-all-files}
+list_of_files <- list.files("../data/")
+
+merged_logs <- do.call(rbind(lapply(list_of_files, parse_log)))
+```
 
 # Analysis
