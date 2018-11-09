@@ -86,6 +86,13 @@ parse_log <- function(file_path) {
     spread(incident_tag, file_contents) %>%
     janitor::clean_names() %>%
     mutate(location_raw = gsub("Location/Address: |Vicinity of: ", "", x0)) %>%
+    # mutate(location_split = strsplit(location_raw, " - ")) %>%
+    mutate(location_name = stringr::str_extract(location_raw, "^(.+?) - "),
+           location_name = gsub(" - ", "", location_name),
+           location_name = trimws(location_name)) %>%
+    mutate(location_addr = gsub("^(.+?) - ","", location_raw),
+           location_addr = gsub("Apt.(.+?)$","", location_addr),
+           location_addr = trimws(location_addr)) %>%
     mutate(incident_id = stringr::str_extract(x1, "\\d{2}-\\d{4}")) %>% # \\d{4}
     mutate(hour_min = stringr::str_extract(x1, " \\d{4}")) %>%
     mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0))
