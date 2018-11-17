@@ -22,17 +22,22 @@ knitr::opts_chunk$set(message=FALSE,
 ```
 
 ```{r packages}
+# library(devtools)
 library(tidyverse)
 library(rprojroot)
 library(rvest)
 library(httr)
 library(pbapply)
 library(stringr)
+library(lubridate)
 # library(officer)
 library(textreadr)
+library(ggmap)
+# library(nominatim) # devtools::install_github("hrbrmstr/nominatim")
 
 # themes
 library(hrbrthemes)
+library(ggthemes)
 ```
 
 ```{r paths}
@@ -49,9 +54,13 @@ https://stackoverflow.com/questions/33790052/download-all-files-from-a-folder-on
 
 https://stackoverflow.com/questions/30790114/applying-same-function-on-multiple-files-in-r
 
+https://stackoverflow.com/questions/32504880/street-address-to-geolocation-lat-long
+
+https://www.jessesadler.com/post/geocoding-with-r/
+
 # Data
 
-```{r scrape-melrose-police-logs}
+```{r scrape-melrose-police-logs, eval=FALSE}
 log_url <- "https://melrosepolice.net/police-logs/"
 
 url_contents <- read_html(log_url)
@@ -76,45 +85,159 @@ parse_log <- function(file_path) {
   file_df <- as.data.frame(file_contents)
   
   parse_df <- file_df %>%
-    filter(grepl("\\d{2}-\\d{4,} \\d{4}|Location|Vicinity|Date", file_contents)) %>%
+    filter(grepl("\\d{0,}-\\d{1,} \\d{4}|Location|Vicinity|Date", file_contents)) %>%
     mutate(date_tag = ifelse(grepl("Date",file_contents), 1, 0)) %>%
     mutate(datestamp = ifelse(grepl("Date",file_contents), stringr::str_extract(file_contents, "\\d+/\\d+/\\d+"),NA)) %>%
     fill(datestamp) %>%
     filter(!grepl("Date",file_contents)) %>%
-    mutate(incident_tag = ifelse(grepl("\\d{2}-\\d{4,} \\d{4}", file_contents),1,0)) %>%
+    mutate(incident_tag = ifelse(grepl("\\d{0,}-\\d{1,} \\d{4}", file_contents),1,0)) %>%
     mutate(inc_cnt = cumsum(incident_tag)) %>%
     spread(incident_tag, file_contents) %>%
-    janitor::clean_names() %>%
-    mutate(location_raw = gsub("Location/Address: |Vicinity of: ", "", x0)) %>%
-    # mutate(location_split = strsplit(location_raw, " - ")) %>%
-    mutate(location_name = stringr::str_extract(location_raw, "^(.+?) - "),
-           location_name = gsub(" - ", "", location_name),
-           location_name = trimws(location_name)) %>%
-    mutate(location_addr = gsub("^(.+?) - ","", location_raw),
-           location_addr = gsub("Apt.(.+?)$","", location_addr),
-           location_addr = trimws(location_addr)) %>%
-    mutate(incident_id = stringr::str_extract(x1, "\\d{2}-\\d{4,}")) %>% # \\d{4}
-    mutate(hour_min = stringr::str_extract(x1, " \\d{4}")) %>%
-    # mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0)) %>%
-    select(-c(date_tag, inc_cnt))
+    janitor::clean_names() 
   
   return(parse_df)
 }
 
 ```
 
-```{r test-parse-func}
-test_function <- parse_log("../data/Dispatch-Log-From-April-13-20-2015.docx")
+```{r loop-over-all-files}
+# log_files <- list.files("../data/", ".docx")
+log_files <- paste0("../data/", list.files("../data/", ".docx")) # exact relative path
 
-test_function2 <- parse_log("../data/MPD-Dispatch-Log-Oct-22-to-Oct-28.docx")
+merged_logs <- do.call(rbind,lapply(log_files, function(x) tryCatch(parse_log(x),
+                                       error = function(e) print(paste(x, "caused an error")))))
+
 ```
 
-```{r loop-over-all-files}
-list_of_files <- list.files("../data/")
+In total, 10 files (as of 11/16/2018) from police log set were not usable: 2 were 404 on the website, remainder had incident ID's missing that compromised the data parsing process.
 
-merged_logs <- do.call(rbind(lapply(paste0("../data/",list_of_files), parse_log)))
+```{r debug-data, eval = FALSE}
+# TODO - fix file issues
+# [1] "../data/Melrose-Police-Department-Dispatch-09-07-2015-thru-09-14-2015.docx caused an error" - identified issue: some records have no incident id
+# [1] "../data/Melrose-Police-Department-Dispatch-Log-8-17-2015-Thru-8-24-2015.docx caused an error" - corrupt file?
+# [1] "../data/Melrose-Police-Department-press-log-April-27-2015-May-4-2015.docx caused an error" - identified issue: some records have no incident id
+# [1] "../data/Melrose-Police-Log-5-25-2015-thru-6-1-2015.docx caused an error" - identified issue: some records have no incident id 
+# [1] "../data/MPD-Dispatch-Log-Feb-13-to-Feb-19.docx caused an error"
+# [1] "../data/MPD-Dispatch-Log-Jan-29-to-Feb-4.docx caused an error"
+# [1] "../data/MPD-Dispatch-Log-July-10-to-July-16.docx caused an error"
+# [1] "../data/MPD-Dispatch-Log-Sept-24-to-Sept-30.docx caused an error"
 
-paste0("../data/",list_of_files)
+# usage: take a known error file, assign it to variable, then start debugging
+
+error_file <- "../data/Melrose-Police-Log-5-25-2015-thru-6-1-2015.docx"
+
+parse_log(error_file)
+
+file_contents <- textreadr::read_docx(error_file)
+  
+file_df <- as.data.frame(file_contents)
+
+parse_df <- file_df %>%
+  filter(grepl("\\d{0,}-\\d{1,} \\d{4}|Location|Vicinity|Date", file_contents)) %>%
+  mutate(date_tag = ifelse(grepl("Date",file_contents), 1, 0)) %>%
+  mutate(datestamp = ifelse(grepl("Date",file_contents), stringr::str_extract(file_contents, "\\d+/\\d+/\\d+"),NA)) %>%
+  fill(datestamp) %>%
+  filter(!grepl("Date",file_contents)) %>%
+  mutate(incident_tag = ifelse(grepl("\\d{0,}-\\d{1,} \\d{4}", file_contents),1,0)) %>%
+  mutate(inc_cnt = cumsum(incident_tag)) # %>%
+  spread(incident_tag, file_contents) 
+
+```
+
+
+```{r prep-data}
+prep_dat <- merged_logs %>%
+  mutate(location_raw = gsub("Location/Address: |Vicinity of: ", "", x0)) %>%
+  # mutate(location_split = strsplit(location_raw, " - ")) %>%
+  mutate(location_name = stringr::str_extract(location_raw, "^(.+?) - "),
+         location_name = gsub(" - ", "", location_name),
+         location_name = trimws(location_name)) %>%
+  mutate(location_addr = gsub("^(.+?) - ","", location_raw),
+         # location_addr = gsub("Apt.(.+?)$","", location_addr),
+         location_addr = gsub("@.*","", location_addr),
+         location_addr = gsub("Apt.*","", location_addr),
+         location_addr = gsub("Location:","", location_addr),
+         location_addr = gsub("\\[.*\\]","", location_addr),
+         location_addr = trimws(location_addr)# ,
+         # location_addr = paste0(location_addr, ", Melrose, MA")
+         ) %>%
+  mutate(incident_id = stringr::str_extract(x1, "\\d{0,}-\\d{1,}")) %>% # \\d{4}
+  mutate(hour_min = stringr::str_extract(x1, " \\d{4}")) %>%
+  # rename("description_raw" = "x1") %>%
+  mutate(description_raw = gsub("\\d{0,}-\\d{1,} \\d{4}","", x1),
+         description_raw = trimws(description_raw)) %>%
+  mutate(datestamp = mdy(datestamp),
+         year = year(datestamp),
+         month = month(datestamp),
+         date = date(datestamp)) %>%
+  # mutate(accident = ifelse(grepl("ACCIDENT|accident", x1), 1, 0)) %>%
+  select(-c(date_tag, inc_cnt, location_raw, x1)) # x0 was the origincal location/address row 
+
+# location_addr <- unique(prep_dat$location_addr)
+
+# loc_distinct <- distinct(prep_dat, location_addr)
+
+
 ```
 
 # Analysis
+
+## Accidents 
+
+```{r accident-dat}
+accident_dat <- prep_dat %>%
+  filter(grepl("accident", description_raw, ignore.case = TRUE))
+```
+
+```{r street count}
+street_dat <- accident_dat %>%
+  mutate(street = gsub("[0-9]","",location_addr),
+         street = trimws(street),
+         street = case_when(
+           street == "LYNN FELLS" ~ "LYNN FELLS PKWY",
+           street == "LYNN FELLS P" ~ "LYNN FELLS PKWY",
+           street == "LYNN FELLS PKWY FELLS" ~ "LYNN FELLS PKWY",
+           street == "LYNN FELLS PKWY P" ~ "LYNN FELLS PKWY",
+           street == "MAIN" ~ "MAIN ST",
+           street == "WEST EMERSON ST" ~ "W EMERSON ST",
+           TRUE ~ street
+         ))
+
+top_street <- street_dat %>%
+  count(street) %>%
+  arrange(desc(n)) %>%
+  top_n(10)
+
+```
+
+```{r bar-street-accidents, fig.width = 10, fig.height= 16}
+street_dat %>%
+  count(street, year) %>%
+  filter(!is.na(year)) %>%
+  filter(!is.na(street)) %>%
+  ggplot(aes(x = reorder(street, desc(street)), y = n)) +
+  facet_wrap(~year, nrow = 1) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_fivethirtyeight() +
+  theme(axis.text.y = element_text(size = 6)) +
+  labs(title = "Accidents in Melrose by Street",
+       caption = "Source: Melrose Police Logs")
+```
+
+```{r top-street-month}
+street_dat %>%
+  left_join(top_street, by = c("street" = "street")) %>%
+  count(street, year, month) %>%
+  ggplot()
+```
+
+```{r geocode-addresses}
+# TODO
+
+# Initialize the data frame
+accident_loc_distinct <- distinct(accident_dat, location_addr)
+
+test_loc_distinct <- sample_n(accident_loc_distinct, 10)
+test_loc_distinct_geo <- mutate_geocode(test_loc_distinct, location_addr)
+```
